@@ -37,6 +37,12 @@ server('production', '1.2.3.4')
 
 ```
 
+You may want to run the deployment as standalone (not part of a project), in which case specify it:
+
+```
+set('standalone', true);
+```
+
 ## How to deploy
 
 Run the deploy command:
