@@ -114,7 +114,7 @@ task('deploy:update_code', function () {
 desc('Check clean working directory');
 task('deploy:clean_working_dir', function () {
 
-    if (get('standalone')) {
+    if (get('standalone', false)) {
         return;
     }
 
@@ -129,7 +129,7 @@ task('deploy:clean_working_dir', function () {
 desc('Fetch git references');
 task('deploy:git_fetch', function () {
 
-    if (get('standalone')) {
+    if (get('standalone', false)) {
         return;
     }
 
@@ -151,7 +151,7 @@ task('deploy:check_branch', function () {
         }
     }
 
-    if (empty($branch) || get('standalone')) {
+    if (empty($branch) || get('standalone', false)) {
         return;
     }
 
@@ -173,7 +173,7 @@ task('deploy:check_tag', function () {
         $tag = input()->getOption('tag');
     }
 
-    if (empty($tag) || get('standalone')) {
+    if (empty($tag) || get('standalone', false)) {
         return;
     }
 
