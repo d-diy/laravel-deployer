@@ -180,7 +180,7 @@ task('deploy:check_tag', function () {
     $output = runLocally('git tag');
 
     if (strpos($output, $tag) === false) {
-        if (askConfirmation("The referenced tag $tag doesn't exist. Would you like to create it?", true)) {
+        if (!askConfirmation("The referenced tag $tag doesn't exist. Would you like to create it?", true)) {
             throw new \RuntimeException("The referenced tag $tag doesn't exist on origin.");
         }
         runLocally("git tag $tag");
