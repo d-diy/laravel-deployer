@@ -13,7 +13,7 @@
             "email": "phpfour@gmail.com"
         }
     ],
-    "require-dev": {
+    "require": {
         "deployer/deployer": "^4.3.0"
     },
     "autoload": {
