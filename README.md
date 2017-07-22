@@ -63,3 +63,10 @@ To see what exactly happening you can increase verbosity of output with `--verbo
 * `-v`  for normal output,
 * `-vv`  for more verbose output,
 * `-vvv`  for debug.
+
+Before starting the deployment on server, the following checks will be performed:
+
+* Check the working copy of the repo, show an error and abort if there are uncommitted changes
+* If a branch is referenced but doesn't exist, show an error
+* If a tag is referenced but it doesn't exist, ask the user if it should be created. 
+If the user enters "N", show an error and abort. If "Y", create the tag and continue.
