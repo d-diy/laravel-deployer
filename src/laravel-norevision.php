@@ -157,7 +157,7 @@ task('deploy:check_branch', function () {
 
     $output = runLocally('git branch -a');
 
-    if (strpos($output, "/remotes/origin/$branch") === false) {
+    if (strpos($output, "remotes/origin/$branch") === false) {
         throw new \RuntimeException("The referenced branch $branch doesn't exist on origin.");
     }
 
