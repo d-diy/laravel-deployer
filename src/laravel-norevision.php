@@ -199,7 +199,6 @@ task('deploy', [
     'artisan:down',
     'deploy:update_code',
     'deploy:vendors',
-    'deploy:writable',
     'artisan:migrate',
     'artisan:queue:restart',
     'artisan:up',
