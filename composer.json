@@ -3,6 +3,7 @@
     "description": "A Deployer recipe for Laravel projects that doesn't use symlinked revisions.",
     "type": "library",
     "license": "MIT",
+    "minimum-stability": "stable",
     "authors": [
         {
             "name": "Corey Mcmahon",
