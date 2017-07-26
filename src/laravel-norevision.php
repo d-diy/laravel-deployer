@@ -35,6 +35,14 @@ task('artisan:down', function () {
     writeln('<info>'.$output.'</info>');
 });
 
+desc('Execute artisan migrate');
+task('artisan:migrate', function () {
+    if (get('migration', true) === false) {
+        return;
+    }
+    run('{{bin/php}} {{release_path}}/artisan migrate --force');
+});
+
 desc('Preparing server for deploy');
 task('deploy:prepare', function () {
 

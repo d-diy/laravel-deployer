@@ -43,6 +43,12 @@ You may want to run the deployment as standalone (not part of a project), in whi
 set('standalone', true);
 ```
 
+Also, the migration step can be disable if your app doesn't require it:
+
+```
+set('migration', false);
+```
+
 ## How to deploy
 
 Run the deploy command:
