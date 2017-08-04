@@ -128,7 +128,7 @@ task('deploy:clean_working_dir', function () {
 
     $output = runLocally('git status');
 
-    if (strpos($output, 'working tree clean') === false) {
+    if (strpos($output, 'working directory clean') === false || strpos($output, 'working tree clean') === false) {
         throw new \RuntimeException('Working directory is not clean, please commit your changes.');
     }
 
