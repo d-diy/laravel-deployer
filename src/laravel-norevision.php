@@ -35,6 +35,14 @@ task('artisan:down', function () {
     writeln('<info>'.$output.'</info>');
 });
 
+desc('Execute artisan migrate');
+task('artisan:migrate', function () {
+    if (get('migration', true) === false) {
+        return;
+    }
+    run('{{bin/php}} {{release_path}}/artisan migrate --force');
+});
+
 desc('Preparing server for deploy');
 task('deploy:prepare', function () {
 
@@ -120,7 +128,7 @@ task('deploy:clean_working_dir', function () {
 
     $output = runLocally('git status');
 
-    if (strpos($output, 'working tree clean') === false) {
+    if (strpos($output, 'working directory clean') === false && strpos($output, 'working tree clean') === false) {
         throw new \RuntimeException('Working directory is not clean, please commit your changes.');
     }
 
