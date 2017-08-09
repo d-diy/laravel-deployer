@@ -149,7 +149,7 @@ task('deploy:git_fetch', function () {
 desc('Check parameters');
 task('deploy:check_parameters', function () {
 
-    if (!input()->hasOption('tag') && input()->hasOption('branch')) {
+    if (!input()->hasOption('tag') && !input()->hasOption('branch')) {
         throw new \RuntimeException("No branch or tag was supplied. Please provide either --tag={tag} or --branch={branch} so I know what to deploy.");
     }
 
