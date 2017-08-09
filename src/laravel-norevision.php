@@ -129,7 +129,9 @@ task('deploy:clean_working_dir', function () {
     $output = runLocally('git status');
 
     if (strpos($output, 'working directory clean') === false && strpos($output, 'working tree clean') === false) {
-        throw new \RuntimeException('Working directory is not clean, please commit your changes.');
+        if (!askConfirmation("The local working path is not clean.\n\nThis means there may be uncommitted changes that will NOT be deployed. Continue anyway?", true)) {
+            throw new \RuntimeException('Working directory is not clean, please commit your changes before deploying.');
+        }
     }
 
 });
@@ -149,8 +151,8 @@ task('deploy:git_fetch', function () {
 desc('Check parameters');
 task('deploy:check_parameters', function () {
 
-    if (!input()->hasOption('tag') && !input()->hasOption('branch')) {
-        throw new \RuntimeException("No branch or tag was supplied. Please provide either --tag={tag} or --branch={branch} so I know what to deploy.");
+    if (empty(input()->getOption('tag')) && empty(input()->getOption('branch'))) {
+        throw new \RuntimeException("No branch or tag was supplied.\n\nPlease provide either --tag={tag} or --branch={branch} so I know what to deploy.");
     }
 
 });
@@ -175,7 +177,7 @@ task('deploy:check_branch', function () {
     $output = runLocally('git branch -a');
 
     if (strpos($output, "remotes/origin/$branch") === false) {
-        throw new \RuntimeException("The referenced branch $branch doesn't exist on origin.");
+        throw new \RuntimeException("The referenced branch `$branch` doesn't exist on origin.");
     }
 
 });
@@ -197,8 +199,8 @@ task('deploy:check_tag', function () {
     $output = runLocally('git tag');
 
     if (strpos($output, $tag) === false) {
-        if (!askConfirmation("The referenced tag $tag doesn't exist. Would you like to create it?", true)) {
-            throw new \RuntimeException("The referenced tag $tag doesn't exist on origin.");
+        if (!askConfirmation("The referenced tag `$tag` doesn't exist. Would you like to create it?", true)) {
+            throw new \RuntimeException("The referenced tag `$tag` doesn't exist on origin.");
         }
         runLocally("git tag $tag");
         runLocally("git push origin --tags");
