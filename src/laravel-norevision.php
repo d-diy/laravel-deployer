@@ -102,11 +102,11 @@ task('deploy:update_code', function () {
     run("cd {{release_path}} && $git fetch --tags");
 
     if (!empty($tag)) {
+        // Tags shouldn't change over time, so no need to `git pull` here.
         run("cd {{release_path}} && $git checkout $tag");
     } elseif (!empty($branch)) {
-        run("cd {{release_path}} && $git checkout $branch");
-    } else {
-        run("cd {{release_path}} && $git pull");
+        // We need to `git pull` from origin in case the branch has been updated:
+        run("cd {{release_path}} && $git checkout $branch && git pull origin $branch");
     }
 
 });
@@ -135,6 +135,15 @@ task('deploy:git_fetch', function () {
 
     runLocally('git fetch');
     runLocally('git fetch --tags');
+
+});
+
+desc('Check parameters');
+task('deploy:check_parameters', function () {
+
+    if (!input()->hasOption('tag') && input()->hasOption('branch')) {
+        throw new \RuntimeException("No branch or tag was supplied. Please provide either --tag={tag} or --branch={branch} so I know what to deploy.");
+    }
 
 });
 
@@ -190,6 +199,7 @@ task('deploy:check_tag', function () {
 });
 
 task('deploy', [
+    'deploy:check_parameters',
     'deploy:clean_working_dir',
     'deploy:git_fetch',
     'deploy:check_branch',
