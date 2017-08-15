@@ -208,6 +208,49 @@ task('deploy:check_tag', function () {
 
 });
 
+desc('Send release note to slack');
+task('slack:send-release-notes', function () {
+
+    if (!input()->hasOption('start') && !input()->hasOption('end')) {
+        return;
+    }
+
+    $start = input()->getOption('start');
+    $end   = input()->getOption('end');
+
+    $output = runLocally("release-notes generate --start=$start --end=$end --format=slack");
+
+    $attachment = [
+        'title' => get('slack_title'),
+        'color' => get('slack_color'),
+        'text'  => $output,
+    ];
+
+    $postString = json_encode([
+        'icon_emoji'  => get('slack_emoji'),
+        'username'    => get('slack_name'),
+        'attachments' => [$attachment],
+        "mrkdwn"      => true,
+    ]);
+
+    $ch = curl_init();
+
+    $options = [
+        CURLOPT_URL            => get('slack_webhook'),
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => ['Content-type: application/json'],
+        CURLOPT_POSTFIELDS     => $postString,
+    ];
+
+    curl_setopt_array($ch, $options);
+
+    if (curl_exec($ch) !== false) {
+        curl_close($ch);
+    }
+
+});
+
 task('deploy', [
     'deploy:check_parameters',
     'deploy:clean_working_dir',
