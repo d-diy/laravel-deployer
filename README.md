@@ -47,6 +47,24 @@ Also, the migration step can be disable if your project doesn't require it:
 set('migration', false);
 ```
 
+If you'd like to integrate with FoodKit's release note generator, add the following:
+
+```php
+
+option('start', null, InputOption::VALUE_OPTIONAL, 'The start tag/branch');
+option('end', null, InputOption::VALUE_OPTIONAL, 'The end tag/branch');
+
+set('slack_title', 'Release notes');
+set('slack_color', '#4d91f7');
+set('slack_emoji', ':ghost:');
+set('slack_name', 'Laravel Deployer');
+set('slack_webhook', 'https://hooks.slack.com/services/ABCDEFGH/IJLMNOPQ/OJI7OA9IU1BAJgGj4ge3YD9A');
+
+after('deploy', 'slack:send-release-notes');
+```
+
+then run the deployment with the `start` and `end` command line parameters.
+
 ## How to deploy
 
 Run the deploy command:
@@ -60,6 +78,12 @@ Optionally, a tag or a branch can be specified on the command line:
 ```sh
 php vendor/bin/dep deploy production --tag="v0.1"
 php vendor/bin/dep deploy production --branch="develop"
+```
+
+Optionally, if you're integrating with the release note generator:
+
+```sh
+php vendor/bin/dep deploy production --tag="v1.0.8" --start="v1.0.7" --end="v1.0.8"
 ```
 
 To see what exactly happening you can increase verbosity of output with `--verbose` option: 
