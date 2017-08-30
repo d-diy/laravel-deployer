@@ -249,7 +249,44 @@ task('slack:send-release-notes', function () {
         curl_close($ch);
     }
 
-});
+})->onlyOn(['production']);
+
+desc('Send release note to API');
+task('slack:send-release-notes-api', function () {
+
+    if (!input()->hasOption('start') && !input()->hasOption('end')) {
+        return;
+    }
+
+    $start = input()->getOption('start');
+    $end   = input()->getOption('end');
+
+    $endpoint = get('api_endpoint');
+
+    if (empty($endpoint)) {
+        return;
+    }
+
+    $output = runLocally("release-notes generate --start=$start --end=$end --format=json");
+
+    $ch = curl_init();
+
+    $options = [
+        CURLOPT_URL            => $endpoint,
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => ['Content-type: application/json'],
+        CURLOPT_POSTFIELDS     => $output,
+    ];
+
+    curl_setopt_array($ch, $options);
+
+    if (curl_exec($ch) !== false) {
+        curl_close($ch);
+    }
+
+})->onlyOn(['production']);
+
 
 task('deploy', [
     'deploy:check_parameters',
