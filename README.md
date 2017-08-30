@@ -47,6 +47,8 @@ Also, the migration step can be disable if your project doesn't require it:
 set('migration', false);
 ```
 
+### Slack integration
+
 If you'd like to integrate with FoodKit's release note generator, add the following:
 
 ```php
@@ -61,6 +63,22 @@ set('slack_name', 'Laravel Deployer');
 set('slack_webhook', 'https://hooks.slack.com/services/ABCDEFGH/IJLMNOPQ/OJI7OA9IU1BAJgGj4ge3YD9A');
 
 after('deploy', 'slack:send-release-notes');
+```
+
+then run the deployment with the `start` and `end` command line parameters.
+
+### API integration
+
+If you'd like to send the release note to an API endpoint, add the following:
+
+```php
+
+option('start', null, InputOption::VALUE_OPTIONAL, 'The start tag/branch');
+option('end', null, InputOption::VALUE_OPTIONAL, 'The end tag/branch');
+
+set('api_endpoint', 'https://api.product.com');
+
+after('deploy', 'slack:send-release-notes-api');
 ```
 
 then run the deployment with the `start` and `end` command line parameters.
