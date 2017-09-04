@@ -94,16 +94,15 @@ task('deploy:update_code', function () {
     $git    = get('bin/git');
 
     // If option `branch` is set.
-    if (input()->hasOption('branch')) {
-        $inputBranch = input()->getOption('branch');
-        if (!empty($inputBranch)) {
-            $branch = $inputBranch;
-        }
+    if (!empty(input()->getOption('branch'))) {
+        $branch = input()->getOption('branch');
     }
 
     // If option `tag` is set
-    if (input()->hasOption('tag')) {
+    if (!empty(input()->getOption('tag'))) {
         $tag = input()->getOption('tag');
+    } elseif (get('tag')) {
+        $tag = get('tag');
     }
 
     run("cd {{release_path}} && $git fetch");
@@ -163,11 +162,8 @@ task('deploy:check_branch', function () {
     $branch = get('branch');
 
     // If option `branch` is set.
-    if (input()->hasOption('branch')) {
-        $inputBranch = input()->getOption('branch');
-        if (!empty($inputBranch)) {
-            $branch = $inputBranch;
-        }
+    if (!empty(input()->getOption('branch'))) {
+        $branch = input()->getOption('branch');
     }
 
     if (empty($branch) || get('standalone', false)) {
@@ -188,8 +184,10 @@ task('deploy:check_tag', function () {
     $tag = null;
 
     // If option `tag` is set
-    if (input()->hasOption('tag')) {
+    if (!empty(input()->getOption('tag'))) {
         $tag = input()->getOption('tag');
+    } elseif (get('tag')) {
+        $tag = get('tag');
     }
 
     if (empty($tag) || get('standalone', false)) {
@@ -287,6 +285,61 @@ task('slack:send-release-notes-api', function () {
 
 })->onlyOn(['production']);
 
+desc('Run release process');
+task('deploy:release', function(){
+
+    $prefix  = get('tag-prefix');
+    $lastTag = runLocally("git describe --tag --match '{$prefix}[0-9]*' --abbrev=0 HEAD");
+
+    if (empty($lastTag)) {
+        throw new \RuntimeException("Could not determine last tag.");
+    }
+
+    $numbers = explode('.', str_replace($prefix, '', trim($lastTag)));
+    $numbers = array_map('intval', $numbers);
+
+    if (count($numbers) < 3) {
+        throw new \RuntimeException("Tag name does not follow semver standard.");
+    }
+
+    $numbers[1]++;
+
+    $newTag = $prefix.implode('.', $numbers);
+
+    runLocally("git tag $newTag");
+    runLocally("git push origin --tags");
+
+    set('tag', $newTag);
+
+});
+
+desc('Run hotfix process');
+task('deploy:hotfix', function(){
+
+    $prefix  = get('tag-prefix');
+    $lastTag = runLocally("git describe --tag --match '{$prefix}[0-9]*' --abbrev=0 HEAD");
+
+    if (empty($lastTag)) {
+        throw new \RuntimeException("Could not determine last tag.");
+    }
+
+    $numbers = explode('.', str_replace($prefix, '', trim($lastTag)));
+    $numbers = array_map('intval', $numbers);
+
+    if (count($numbers) < 3) {
+        throw new \RuntimeException("Tag name does not follow semver standard.");
+    }
+
+    $numbers[2]++;
+
+    $newTag = $prefix.implode('.', $numbers);
+
+    runLocally("git tag $newTag");
+    runLocally("git push origin --tags");
+
+    set('tag', $newTag);
+
+});
 
 task('deploy', [
     'deploy:check_parameters',
@@ -302,4 +355,32 @@ task('deploy', [
     'artisan:migrate',
     'artisan:queue:restart',
     'artisan:up',
+]);
+
+task('release', [
+    'deploy:clean_working_dir',
+    'deploy:git_fetch',
+    'deploy:release',
+    'deploy:prepare',
+    'deploy:checkout_code',
+    'artisan:down',
+    'deploy:update_code',
+    'deploy:vendors',
+    'artisan:migrate',
+    'artisan:queue:restart',
+    'artisan:up'
+]);
+
+task('hotfix', [
+    'deploy:clean_working_dir',
+    'deploy:git_fetch',
+    'deploy:hotfix',
+    'deploy:prepare',
+    'deploy:checkout_code',
+    'artisan:down',
+    'deploy:update_code',
+    'deploy:vendors',
+    'artisan:migrate',
+    'artisan:queue:restart',
+    'artisan:up'
 ]);
