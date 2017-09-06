@@ -129,6 +129,8 @@ task('deploy:update_code', function () {
 desc('Check clean working directory');
 task('deploy:clean_working_dir', function () {
 
+    $git = get('bin/git', null);
+
     if (get('standalone', false)) {
         return;
     }
@@ -141,7 +143,7 @@ task('deploy:clean_working_dir', function () {
         }
     }
 
-    $output = run('git status');
+    $output = run("cd {{release_path}} && $git status");
 
     if (strpos($output, 'working directory clean') === false && strpos($output, 'working tree clean') === false) {
         $message = 'Remote working directory is not clean! ';
