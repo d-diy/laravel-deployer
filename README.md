@@ -61,8 +61,7 @@ set('slack_color', '#4d91f7');
 set('slack_emoji', ':ghost:');
 set('slack_name', 'Laravel Deployer');
 set('slack_webhook', 'https://hooks.slack.com/services/ABCDEFGH/IJLMNOPQ/OJI7OA9IU1BAJgGj4ge3YD9A');
-
-after('deploy', 'slack:send-release-notes');
+set('release_notes_command', 'vendor/bin/release-notes generate');
 ```
 
 then run the deployment with the `start` and `end` command line parameters.
@@ -117,7 +116,7 @@ If you use semantic versioning, the repo has "hotfix" and "release" tasks built-
 ### Hotfixes
 
 ```sh
-php vendor/bin/dep hotfix
+php vendor/bin/dep hotfix production
 ```
 
 This will take the latest tag, increment it by 0.0.1, create a new tag and deploy that.
@@ -125,7 +124,7 @@ This will take the latest tag, increment it by 0.0.1, create a new tag and deplo
 ### Releases
 
 ```sh
-php vendor/bin/dep release
+php vendor/bin/dep release production
 ```
 
 Same as for the hotfix command, but it will increment latest tag by 0.1

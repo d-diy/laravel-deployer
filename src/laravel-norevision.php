@@ -3,6 +3,7 @@
 namespace Deployer;
 
 require 'recipe/laravel.php';
+require __DIR__.'/slack.php';
 
 /**
  * Variables
@@ -33,12 +34,18 @@ task('artisan:up', function () {
     writeln('<info>'.$output.'</info>');
 });
 
+/**
+ *
+ */
 desc('Enable maintenance mode');
 task('artisan:down', function () {
     $output = run('{{bin/php}} {{release_path}}/artisan down');
     writeln('<info>'.$output.'</info>');
 });
 
+/**
+ *
+ */
 desc('Execute artisan migrate');
 task('artisan:migrate', function () {
     if (get('migration', true) === false) {
@@ -47,6 +54,9 @@ task('artisan:migrate', function () {
     run('{{bin/php}} {{release_path}}/artisan migrate --force');
 });
 
+/**
+ *
+ */
 desc('Preparing server for deploy');
 task('deploy:prepare', function () {
 
@@ -77,20 +87,9 @@ task('deploy:prepare', function () {
 
 });
 
-desc('Checkout repository');
-task('deploy:checkout_code', function () {
-
-    $repo = trim(get('repository'));
-    $git  = get('bin/git');
-
-    $cloneExists = run("if [ -d {{release_path}}/.git ]; then echo 'true'; fi")->toBool();
-
-    if (!$cloneExists) {
-        run("$git clone $repo {{release_path}} 2>&1");
-    }
-
-});
-
+/**
+ * Pulls down all branches/tags and then checks out the relevant one (based on command line arguments).
+ */
 desc('Update code');
 task('deploy:update_code', function () {
 
@@ -115,13 +114,18 @@ task('deploy:update_code', function () {
     if (!empty($tag)) {
         // Tags shouldn't change over time, so no need to `git pull` here.
         run("cd {{release_path}} && $git checkout $tag");
+        input()->setArgument('end', $tag);
     } elseif (!empty($branch)) {
         // We need to `git pull` from origin in case the branch has been updated:
         run("cd {{release_path}} && $git checkout $branch && git pull origin $branch");
+        input()->setArgument('end', $branch);
     }
 
 });
 
+/**
+ * Checks the working path of local folder and remote folder to ensure no uncommitted changes would be lost.
+ */
 desc('Check clean working directory');
 task('deploy:clean_working_dir', function () {
 
@@ -137,8 +141,19 @@ task('deploy:clean_working_dir', function () {
         }
     }
 
+    $output = run('git status');
+
+    if (strpos($output, 'working directory clean') === false && strpos($output, 'working tree clean') === false) {
+        $message = 'Remote working directory is not clean! ';
+        $message .= '\nThis means there are uncommitted changes on the server that would be lost if we deployed now. ';
+        $message .= 'Please resolve this manually and try deploying again.';
+        throw new \RuntimeException($message);
+    }
 });
 
+/**
+ *
+ */
 desc('Fetch git references');
 task('deploy:git_fetch', function () {
 
@@ -151,15 +166,26 @@ task('deploy:git_fetch', function () {
 
 });
 
+/**
+ * Check all the required parameters have been supplied.
+ */
 desc('Check parameters');
 task('deploy:check_parameters', function () {
+
+    // If the stage is not provided we want to prevent the script from deploying to ALL environments (default behaviour).
+    if (is_null(input()->getArgument('stage'))) {
+        $environments = array_keys(Deployer::get()->environments->toArray());
+        throw new \RuntimeException("No environment was specified. Run the command again with one of the available environments as a parameter: " . implode(', ', $environments));
+    }
 
     if (empty(input()->getOption('tag')) && empty(input()->getOption('branch'))) {
         throw new \RuntimeException("No branch or tag was supplied.\n\nPlease provide either --tag={tag} or --branch={branch} so I know what to deploy.");
     }
-
 });
 
+/**
+ *
+ */
 desc('Check branch existence');
 task('deploy:check_branch', function () {
 
@@ -210,17 +236,62 @@ task('deploy:check_tag', function () {
 
 });
 
-desc('Send release note to slack');
-task('slack:send-release-notes', function () {
+/**
+ *
+ */
+desc('Send deployment message to slack');
+task('notify:send-deployment-message', function () {
 
+    if (empty(get('slack_webhook', ''))) {
+        return;
+    }
+
+    $repo = str_replace(['https://', 'http://', 'git@', 'github.com:'], '', get('repository'));
+    $stage = input()->getArgument('stage');
+    $deployed = input()->getArgument('end');
+
+    $output = "Deployed {$repo} at {$deployed} to {$stage}!";
+
+    $attachment = [
+        'title' => get('slack_title', null),
+        'color' => get('slack_color', null),
+        'text'  => $output,
+    ];
+
+    $postString = json_encode([
+        'icon_emoji'  => get('slack_emoji', ':robot_face:'),
+        'username'    => get('slack_name', 'Deployment Bot'),
+        'attachments' => [$attachment],
+        'mrkdwn'      => true,
+    ]);
+
+    http_post(get('slack_webhook', null), $postString);
+
+})->onlyOn(['production']);
+
+/**
+ *
+ */
+desc('Send release note to slack');
+task('notify:send-release-notes', function () {
+
+    if (empty(get('slack_webhook', ''))) {
+        return;
+    }
+    
     if (!input()->hasOption('start') && !input()->hasOption('end')) {
+        return;
+    }
+
+    if (empty(get('release_notes_command', ''))) {
         return;
     }
 
     $start = input()->getOption('start');
     $end   = input()->getOption('end');
 
-    $output = runLocally("release-notes generate --start=$start --end=$end --format=slack");
+    $output = runLocally(get('release_notes_command') . " --start=$start --end=$end --format=slack");
+    // @todo: format release notes as a "post" (instead of just a message)
 
     $attachment = [
         'title' => get('slack_title'),
@@ -235,28 +306,21 @@ task('slack:send-release-notes', function () {
         "mrkdwn"      => true,
     ]);
 
-    $ch = curl_init();
-
-    $options = [
-        CURLOPT_URL            => get('slack_webhook'),
-        CURLOPT_POST           => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => ['Content-type: application/json'],
-        CURLOPT_POSTFIELDS     => $postString,
-    ];
-
-    curl_setopt_array($ch, $options);
-
-    if (curl_exec($ch) !== false) {
-        curl_close($ch);
-    }
+    http_post(get('slack_webhook'), $postString);
 
 })->onlyOn(['production']);
 
+/**
+ *
+ */
 desc('Send release note to API');
-task('slack:send-release-notes-api', function () {
+task('notify:send-release-notes-api', function () {
 
     if (!input()->hasOption('start') && !input()->hasOption('end')) {
+        return;
+    }
+
+    if (empty(get('release_notes_command', ''))) {
         return;
     }
 
@@ -269,32 +333,20 @@ task('slack:send-release-notes-api', function () {
         return;
     }
 
-    $output = runLocally("release-notes generate --start=$start --end=$end --format=json");
+    // @todo: determine which `release-notes` script to use
+    $output = runLocally(get('release_notes_command') . " --start=$start --end=$end --format=json");
 
-    $ch = curl_init();
-
-    $options = [
-        CURLOPT_URL            => $endpoint,
-        CURLOPT_POST           => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => ['Content-type: application/json'],
-        CURLOPT_POSTFIELDS     => $output,
-    ];
-
-    curl_setopt_array($ch, $options);
-
-    if (curl_exec($ch) !== false) {
-        curl_close($ch);
-    }
+    http_post($endpoint, $output);
 
 })->onlyOn(['production']);
 
+/**
+ *
+ */
 desc('Run release process');
 task('deploy:release', function(){
 
     $prefix  = get('tag-prefix');
-    // Prefix needs to be used as a regex, so we need to escape the backslash character if used:
-    $prefix = str_replace('\\', '\\\\', $prefix);
 
     $lastTag = runLocally("git describe --tag --match '{$prefix}[0-9]*' --abbrev=0 HEAD");
 
@@ -313,15 +365,23 @@ task('deploy:release', function(){
 
     $newTag = $prefix.implode('.', $numbers);
 
-    writeln("<info>Latest tag is {$lastTag}. Release tag will be {$newTag}</info>");
+    if (!askConfirmation("Latest tag before release is {$lastTag}. Continuing will tag current HEAD at {$newTag} and deploy to production. Proceed?", true)) {
+        throw new \RuntimeException("User aborted.");
+    }
 
     runLocally("git tag $newTag");
     runLocally("git push origin --tags");
 
     set('tag', $newTag);
 
+    // Set these for the release notes:
+    input()->setArgument('start', $lastTag);
+    input()->setArgument('end', $newTag);
 });
 
+/**
+ *
+ */
 desc('Run hotfix process');
 task('deploy:hotfix', function(){
 
@@ -343,6 +403,10 @@ task('deploy:hotfix', function(){
 
     $newTag = $prefix.implode('.', $numbers);
 
+    if (!askConfirmation("Latest tag before hotfixing is {$lastTag}. Continuing will tag current HEAD at {$newTag} and deploy to production. Proceed?", true)) {
+        throw new \RuntimeException("User aborted.");
+    }
+
     writeln("<info>Latest tag is {$lastTag}. Hotfix tag will be {$newTag}</info>");
 
     runLocally("git tag $newTag");
@@ -350,8 +414,14 @@ task('deploy:hotfix', function(){
 
     set('tag', $newTag);
 
+    // Set these for the release notes:
+    input()->setArgument('start', $lastTag);
+    input()->setArgument('end', $newTag);
 });
 
+/**
+ *
+ */
 task('deploy', [
     'deploy:check_parameters',
     'deploy:clean_working_dir',
@@ -359,39 +429,49 @@ task('deploy', [
     'deploy:check_branch',
     'deploy:check_tag',
     'deploy:prepare',
-    'deploy:checkout_code',
     'artisan:down',
     'deploy:update_code',
     'deploy:vendors',
     'artisan:migrate',
     'artisan:queue:restart',
     'artisan:up',
+    'notify:send-deployment-message',
 ]);
 
+/**
+ *
+ */
 task('release', [
     'deploy:clean_working_dir',
     'deploy:git_fetch',
     'deploy:release',
     'deploy:prepare',
-    'deploy:checkout_code',
     'artisan:down',
     'deploy:update_code',
     'deploy:vendors',
     'artisan:migrate',
     'artisan:queue:restart',
-    'artisan:up'
+    'artisan:up',
+    'notify:send-deployment-message',
+    'notify:send-release-notes',
+    'notify:send-release-notes-api',
 ]);
 
+/**
+ *
+ */
 task('hotfix', [
     'deploy:clean_working_dir',
     'deploy:git_fetch',
     'deploy:hotfix',
     'deploy:prepare',
-    'deploy:checkout_code',
     'artisan:down',
     'deploy:update_code',
     'deploy:vendors',
     'artisan:migrate',
     'artisan:queue:restart',
-    'artisan:up'
+    'artisan:up',
+    'notify:send-deployment-message',
+    'notify:send-release-notes',
+    'notify:send-release-notes-api',
 ]);
