@@ -258,23 +258,15 @@ task('notify:send-deployment-message', function () {
 
     // Possible to get here without 'after' set... somehow
     $deployed = '';
-    if (empty($after = get('after', false))) {
+    $after = get('after', false);
+    if (!empty($after)) {
         $deployed = "at `{$after}` ";
     }
-
-    $output = "Deployed *{$repo}* {$deployed}to *{$stage}*!";
-
-    $attachment = [
-        'title' => get('slack_title', null),
-        'color' => get('slack_color', null),
-        'text'  => $output,
-    ];
 
     $postString = json_encode([
         'icon_emoji'  => get('slack_emoji', ':robot_face:'),
         'username'    => get('slack_name', 'Deployment Bot'),
-        'attachments' => [$attachment],
-        'mrkdwn'      => true,
+        'text'        => "Deployed *{$repo}* {$deployed}to *{$stage}*!",
     ]);
 
     http_post(get('slack_webhook'), $postString);
