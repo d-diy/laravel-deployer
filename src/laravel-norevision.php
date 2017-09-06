@@ -104,7 +104,7 @@ task('deploy:update_code', function () {
     // If option `tag` is set
     if (!empty(input()->getOption('tag'))) {
         $tag = input()->getOption('tag');
-    } elseif (get('tag', null)) {
+    } elseif (get('tag', false)) {
         $tag = get('tag');
     }
 
@@ -114,11 +114,13 @@ task('deploy:update_code', function () {
     if (!empty($tag)) {
         // Tags shouldn't change over time, so no need to `git pull` here.
         run("cd {{release_path}} && $git checkout $tag");
-        input()->setArgument('end', $tag);
+        set('after', $tag);
     } elseif (!empty($branch)) {
         // We need to `git pull` from origin in case the branch has been updated:
         run("cd {{release_path}} && $git checkout $branch && git pull origin $branch");
-        input()->setArgument('end', $branch);
+        set('after', $branch);
+    } else {
+        throw new \RuntimeException("No tag or branch set. Should not be possible to get here :S");
     }
 
 });
@@ -248,11 +250,17 @@ task('notify:send-deployment-message', function () {
         return;
     }
 
-    $repo = str_replace(['https://', 'http://', 'git@', 'github.com:'], '', get('repository'));
-    $stage = input()->getArgument('stage');
-    $deployed = input()->getArgument('end');
+    // make the repo name pretty by stripping out Github related stuff
+    $repo = str_replace(['https://', 'http://', 'www.', 'git@', 'github.com', ':', '.git'], '', get('repository'));
+    $repo = trim($repo, '/');
 
-    $output = "Deployed {$repo} at {$deployed} to {$stage}!";
+    $stage = input()->getArgument('stage');
+
+    if (!($deployed = get('after', false))) {
+        return;
+    }
+
+    $output = "Deployed *{$repo}* at `{$deployed}` to *{$stage}*!";
 
     $attachment = [
         'title' => get('slack_title', null),
@@ -376,9 +384,8 @@ task('deploy:release', function(){
 
     set('tag', $newTag);
 
-    // Set these for the release notes:
-    input()->setArgument('start', $lastTag);
-    input()->setArgument('end', $newTag);
+    // Set for the release notes:
+    set('before', $lastTag);
 });
 
 /**
@@ -417,20 +424,19 @@ task('deploy:hotfix', function(){
     set('tag', $newTag);
 
     // Set these for the release notes:
-    input()->setArgument('start', $lastTag);
-    input()->setArgument('end', $newTag);
+    set('before', $lastTag);
 });
 
 /**
  *
  */
 task('deploy', [
+    'deploy:prepare',
     'deploy:check_parameters',
     'deploy:clean_working_dir',
     'deploy:git_fetch',
     'deploy:check_branch',
     'deploy:check_tag',
-    'deploy:prepare',
     'artisan:down',
     'deploy:update_code',
     'deploy:vendors',
@@ -444,10 +450,10 @@ task('deploy', [
  *
  */
 task('release', [
+    'deploy:prepare',
     'deploy:clean_working_dir',
     'deploy:git_fetch',
     'deploy:release',
-    'deploy:prepare',
     'artisan:down',
     'deploy:update_code',
     'deploy:vendors',
@@ -463,10 +469,10 @@ task('release', [
  *
  */
 task('hotfix', [
+    'deploy:prepare',
     'deploy:clean_working_dir',
     'deploy:git_fetch',
     'deploy:hotfix',
-    'deploy:prepare',
     'artisan:down',
     'deploy:update_code',
     'deploy:vendors',
