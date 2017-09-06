@@ -293,6 +293,9 @@ desc('Run release process');
 task('deploy:release', function(){
 
     $prefix  = get('tag-prefix');
+    // Prefix needs to be used as a regex, so we need to escape the backslash character:
+    $prefix = str_replace('\\', '\\/', $prefix);
+
     $lastTag = runLocally("git describe --tag --match '{$prefix}[0-9]*' --abbrev=0 HEAD");
 
     if (empty($lastTag)) {
@@ -309,6 +312,8 @@ task('deploy:release', function(){
     $numbers[1]++;
 
     $newTag = $prefix.implode('.', $numbers);
+
+    writeln("<info>Latest tag is {$lastTag}. Release tag will be {$newTag}</info>");
 
     runLocally("git tag $newTag");
     runLocally("git push origin --tags");
@@ -337,6 +342,8 @@ task('deploy:hotfix', function(){
     $numbers[2]++;
 
     $newTag = $prefix.implode('.', $numbers);
+
+    writeln("<info>Latest tag is {$lastTag}. Hotfix tag will be {$newTag}</info>");
 
     runLocally("git tag $newTag");
     runLocally("git push origin --tags");
