@@ -93,8 +93,8 @@ task('deploy:prepare', function () {
 desc('Update code');
 task('deploy:update_code', function () {
 
-    $branch = get('branch');
-    $git    = get('bin/git');
+    $branch = get('branch', null);
+    $git    = get('bin/git', null);
 
     // If option `branch` is set.
     if (!empty(input()->getOption('branch'))) {
@@ -104,7 +104,7 @@ task('deploy:update_code', function () {
     // If option `tag` is set
     if (!empty(input()->getOption('tag'))) {
         $tag = input()->getOption('tag');
-    } elseif (get('tag')) {
+    } elseif (get('tag', null)) {
         $tag = get('tag');
     }
 
@@ -189,7 +189,7 @@ task('deploy:check_parameters', function () {
 desc('Check branch existence');
 task('deploy:check_branch', function () {
 
-    $branch = get('branch');
+    $branch = get('branch', null);
 
     // If option `branch` is set.
     if (!empty(input()->getOption('branch'))) {
@@ -216,7 +216,7 @@ task('deploy:check_tag', function () {
     // If option `tag` is set
     if (!empty(input()->getOption('tag'))) {
         $tag = input()->getOption('tag');
-    } elseif (get('tag')) {
+    } elseif (get('tag', false)) {
         $tag = get('tag');
     }
 
@@ -242,7 +242,7 @@ task('deploy:check_tag', function () {
 desc('Send deployment message to slack');
 task('notify:send-deployment-message', function () {
 
-    if (empty(get('slack_webhook', ''))) {
+    if (get('slack_webhook', false)) {
         return;
     }
 
@@ -265,7 +265,7 @@ task('notify:send-deployment-message', function () {
         'mrkdwn'      => true,
     ]);
 
-    http_post(get('slack_webhook', null), $postString);
+    http_post(get('slack_webhook'), $postString);
 
 })->onlyOn(['production']);
 
@@ -275,15 +275,15 @@ task('notify:send-deployment-message', function () {
 desc('Send release note to slack');
 task('notify:send-release-notes', function () {
 
-    if (empty(get('slack_webhook', ''))) {
+    if (get('slack_webhook', false)) {
         return;
     }
-    
+
     if (!input()->hasOption('start') && !input()->hasOption('end')) {
         return;
     }
 
-    if (empty(get('release_notes_command', ''))) {
+    if (get('release_notes_command', false)) {
         return;
     }
 
@@ -294,14 +294,14 @@ task('notify:send-release-notes', function () {
     // @todo: format release notes as a "post" (instead of just a message)
 
     $attachment = [
-        'title' => get('slack_title'),
-        'color' => get('slack_color'),
+        'title' => get('slack_title', null),
+        'color' => get('slack_color', null),
         'text'  => $output,
     ];
 
     $postString = json_encode([
-        'icon_emoji'  => get('slack_emoji'),
-        'username'    => get('slack_name'),
+        'icon_emoji'  => get('slack_emoji', ':robot_face:'),
+        'username'    => get('slack_name', 'Deployment Bot'),
         'attachments' => [$attachment],
         "mrkdwn"      => true,
     ]);
@@ -320,14 +320,14 @@ task('notify:send-release-notes-api', function () {
         return;
     }
 
-    if (empty(get('release_notes_command', ''))) {
+    if (get('release_notes_command')) {
         return;
     }
 
     $start = input()->getOption('start');
     $end   = input()->getOption('end');
 
-    $endpoint = get('api_endpoint');
+    $endpoint = get('api_endpoint', null);
 
     if (empty($endpoint)) {
         return;
