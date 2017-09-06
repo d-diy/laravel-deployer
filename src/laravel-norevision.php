@@ -4,7 +4,9 @@ namespace Deployer;
 
 require 'recipe/laravel.php';
 
-// Variables
+/**
+ * Variables
+ */
 set('bin/composer', function () {
 
     if (commandExist('composer')) {
@@ -22,7 +24,9 @@ set('bin/composer', function () {
 
 });
 
-// Tasks
+/**
+ * Tasks
+ */
 desc('Disable maintenance mode');
 task('artisan:up', function () {
     $output = run('{{bin/php}} {{release_path}}/artisan up');
@@ -326,7 +330,7 @@ task('deploy:hotfix', function(){
     $numbers = explode('.', str_replace($prefix, '', trim($lastTag)));
     $numbers = array_map('intval', $numbers);
 
-    if (count($numbers) < 3) {
+    if (count($numbers) !== 3) {
         throw new \RuntimeException("Tag name does not follow semver standard.");
     }
 

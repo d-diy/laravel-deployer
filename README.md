@@ -49,7 +49,7 @@ set('migration', false);
 
 ### Slack integration
 
-If you'd like to integrate with FoodKit's release note generator, add the following:
+If you'd like to integrate with Foodkit's release note generator, add the following:
 
 ```php
 
@@ -104,14 +104,34 @@ Optionally, if you're integrating with the release note generator:
 php vendor/bin/dep deploy production --tag="v1.0.8" --start="v1.0.7" --end="v1.0.8"
 ```
 
-To see what exactly happening you can increase verbosity of output with `--verbose` option: 
+To see what exactly happening you can increase verbosity of output with `--verbose` option:
 
 * `-v`  for normal output,
 * `-vv`  for more verbose output,
 * `-vvv`  for debug.
 
-Before starting the deployment on server, the following checks will be performed:
+## For semver
 
-* Check the working copy of the repo, show an error and abort if there are uncommitted changes.
-* If a branch is referenced but doesn't exist, show an error.
-* If a tag is referenced but it doesn't exist, ask the user if it should be created. If the user enters "N", show an error and abort. If "Y", create the tag and continue.
+If you use semantic versioning, the repo has "hotfix" and "release" tasks built-in.
+
+### Hotfixes
+
+```sh
+php vendor/bin/dep hotfix
+```
+
+This will take the latest tag, increment it by 0.0.1, create a new tag and deploy that.
+
+### Releases
+
+```sh
+php vendor/bin/dep release
+```
+
+Same as for the hotfix command, but it will increment latest tag by 0.1
+
+## Contributing
+
+See the list of [issues](issues).
+
+Submit a pull request against `master`.
