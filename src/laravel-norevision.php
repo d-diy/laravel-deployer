@@ -246,7 +246,7 @@ task('deploy:check_tag', function () {
 desc('Send deployment message to slack');
 task('notify:send-deployment-message', function () {
 
-    if (get('slack_webhook', false)) {
+    if (empty(get('slack_webhook', false))) {
         return;
     }
 
@@ -256,11 +256,13 @@ task('notify:send-deployment-message', function () {
 
     $stage = input()->getArgument('stage');
 
-    if (!($deployed = get('after', false))) {
-        return;
+    // Possible to get here without 'after' set... somehow
+    $deployed = '';
+    if (empty($after = get('after', false))) {
+        $deployed = "at `{$after}` ";
     }
 
-    $output = "Deployed *{$repo}* at `{$deployed}` to *{$stage}*!";
+    $output = "Deployed *{$repo}* {$deployed}to *{$stage}*!";
 
     $attachment = [
         'title' => get('slack_title', null),
