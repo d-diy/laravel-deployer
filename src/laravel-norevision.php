@@ -3,7 +3,7 @@
 namespace Deployer;
 
 require 'recipe/laravel.php';
-require __DIR__.'/slack.php';
+require __DIR__.'/helpers.php';
 
 /**
  * Variables
@@ -28,38 +28,12 @@ set('bin/composer', function () {
 /**
  * Tasks
  */
-desc('Disable maintenance mode');
-task('artisan:up', function () {
-    $output = run('{{bin/php}} {{release_path}}/artisan up');
-    writeln('<info>'.$output.'</info>');
-});
-
-/**
- *
- */
-desc('Enable maintenance mode');
-task('artisan:down', function () {
-    $output = run('{{bin/php}} {{release_path}}/artisan down');
-    writeln('<info>'.$output.'</info>');
-});
-
-/**
- *
- */
-desc('Execute artisan migrate');
-task('artisan:migrate', function () {
-    if (get('migration', true) === false) {
-        return;
-    }
-    run('{{bin/php}} {{release_path}}/artisan migrate --force');
-});
 
 /**
  *
  */
 desc('Preparing server for deploy');
 task('deploy:prepare', function () {
-
     // Check if shell is POSIX-compliant
     try {
         $result = run('echo $0')->toString();
@@ -70,8 +44,8 @@ task('deploy:prepare', function () {
             );
         }
     } catch (\RuntimeException $e) {
-        $formatter = Deployer::get()->getHelper('formatter');
 
+        $formatter = Deployer::get()->getHelper('formatter');
         $errorMessage = [
             "Shell on your server is not POSIX-compliant. Please change to sh, bash or similar.",
             "Usually, you can change your shell to bash by running: chsh -s /bin/bash",
@@ -81,16 +55,155 @@ task('deploy:prepare', function () {
         throw $e;
     }
 
-    run('if [ ! -d {{deploy_path}} ]; then mkdir -p {{deploy_path}}; fi');
-
     set('release_path', parse('{{deploy_path}}'));
+});
+
+/**
+ *
+ */
+desc('Check that a tag or branch has been supplied as input parameter. Not relevant for hotfixes or releases.');
+task('deploy:check_parameters', function () {
+    if (empty(input()->getOption('tag')) && empty(input()->getOption('branch'))) {
+        throw new \RuntimeException("No branch or tag was supplied.\n\nPlease provide either --tag={tag} or --branch={branch} so I know what to deploy.");
+    }
+});
+
+/**
+ *
+ */
+desc('Exits with an error message if the stage has not been explicitly set.');
+task('deploy:check_stage', function () {
+    // If the stage is not provided we want to prevent the script from deploying to ALL environments (default behaviour).
+    if (is_null(input()->getArgument('stage'))) {
+        $environments = array_keys(Deployer::get()->environments->toArray());
+        throw new \RuntimeException("No environment was specified. Run the command again with one of the available environments as a parameter: " . implode(', ', $environments));
+    }
+});
+
+/**
+ *
+ */
+desc('Checks that the local and remote working paths are both clean (no uncommitted changes).');
+task('deploy:clean_working_dir', function () {
+
+    $git = get('bin/git', null);
+
+    if (get('standalone', false)) {
+        return;
+    }
+
+    // Check the local environment, maybe the user forgot to commit some changes in their local working copy
+    $output = runLocally('git status');
+    if (strpos($output, 'working directory clean') === false && strpos($output, 'working tree clean') === false) {
+        if (!askConfirmation("The local working path is not clean. This means are uncommitted changes on your local repository that will NOT be deployed. Continue anyway?", true)) {
+            throw new \RuntimeException('Working directory is not clean, user aborted.');
+        }
+    }
+
+    // Check the remote machine, we don't want to unintentionally wipe out code changes on the server
+    $output = run("cd {{release_path}} && $git status");
+    if (strpos($output, 'working directory clean') === false && strpos($output, 'working tree clean') === false) {
+        $message = 'Remote working directory is not clean! ';
+        $message .= '\nThis means there are uncommitted changes on the server that would be lost if we deployed now. ';
+        $message .= 'Please resolve this manually and try deploying again.';
+        throw new \RuntimeException($message);
+    }
+});
+
+
+/**
+ *
+ */
+desc('Fetches git references locally.');
+task('deploy:git_fetch', function () {
+
+    if (get('standalone', false)) {
+        return;
+    }
+
+    runLocally('git fetch');
+    runLocally('git fetch --tags');
 
 });
 
 /**
- * Pulls down all branches/tags and then checks out the relevant one (based on command line arguments).
+ *
  */
-desc('Update code');
+desc('When deploying a branch, ensures that the branch exists on the remote.');
+task('deploy:check_branch', function () {
+
+    $branch = get('branch', null);
+
+    // If option `branch` is set.
+    if (!empty(input()->getOption('branch'))) {
+        $branch = input()->getOption('branch');
+    }
+
+    // No local repo in standalone mode, so we can't check this
+    if (get('standalone', false)) {
+        return;
+    }
+
+    if (empty($branch)) {
+        writeln("Not deploying branch, skipping 'deploy:check_branch'");
+        return;
+    }
+
+    $output = runLocally('git branch -a');
+    if (strpos($output, "remotes/origin/$branch") === false) {
+        throw new \RuntimeException("The referenced branch `$branch` doesn't exist on origin.");
+    }
+
+});
+
+desc('When deploying a tag ensures that the tag exists on the remote.');
+task('deploy:check_tag', function () {
+
+    $tag = null;
+
+    // If option `tag` is set
+    if (!empty(input()->getOption('tag'))) {
+        $tag = input()->getOption('tag');
+    } elseif (get('tag', false)) {
+        $tag = get('tag');
+    }
+
+    // No local repo in standalone mode, so we can't check this
+    if (get('standalone', false)) {
+        return;
+    }
+
+    if (empty($tag)) {
+        writeln("Not deploying tag, skipping 'deploy:check_tag'");
+        return;
+    }
+
+    $output = runLocally('git tag');
+
+    if (strpos($output, $tag) === false) {
+        if (!askConfirmation("The referenced tag `$tag` doesn't exist. Would you like to create it?", true)) {
+            throw new \RuntimeException("The referenced tag `$tag` doesn't exist on origin.");
+        }
+        runLocally("git tag $tag");
+        runLocally("git push origin --tags");
+    }
+
+});
+
+/**
+ *
+ */
+desc('Puts the selected stage in maintenance mode');
+task('artisan:down', function () {
+    $output = run('{{bin/php}} {{release_path}}/artisan down');
+    writeln('<info>'.$output.'</info>');
+});
+
+
+/**
+ *
+ */
+desc('Pulls down all branches/tags to the target server and then checks out the relevant one (based on arguments).');
 task('deploy:update_code', function () {
 
     $branch = get('branch', null);
@@ -112,10 +225,12 @@ task('deploy:update_code', function () {
     run("cd {{release_path}} && $git fetch --tags");
 
     if (!empty($tag)) {
+        writeln("<info>Checking out 'refs/tags/{$tag}'...</info>");
         // Tags shouldn't change over time, so no need to `git pull` here.
         run("cd {{release_path}} && $git checkout $tag");
         set('after', $tag);
     } elseif (!empty($branch)) {
+        writeln("<info>Checking out and pulling '{$branch}'...</info>");
         // We need to `git pull` from origin in case the branch has been updated:
         run("cd {{release_path}} && $git checkout $branch && git pull origin $branch");
         set('after', $branch);
@@ -126,176 +241,85 @@ task('deploy:update_code', function () {
 });
 
 /**
- * Checks the working path of local folder and remote folder to ensure no uncommitted changes would be lost.
+ *
  */
-desc('Check clean working directory');
-task('deploy:clean_working_dir', function () {
-
-    $git = get('bin/git', null);
-
-    if (get('standalone', false)) {
+desc('Run database migrations.');
+task('artisan:migrate', function () {
+    if (get('migration', true) === false) {
         return;
     }
+    run('{{bin/php}} {{release_path}}/artisan migrate --force');
+});
 
-    $output = runLocally('git status');
-
-    if (strpos($output, 'working directory clean') === false && strpos($output, 'working tree clean') === false) {
-        if (!askConfirmation("The local working path is not clean.\n\nThis means there may be uncommitted changes that will NOT be deployed. Continue anyway?", true)) {
-            throw new \RuntimeException('Working directory is not clean, please commit your changes before deploying.');
-        }
-    }
-
-    $output = run("cd {{release_path}} && $git status");
-
-    if (strpos($output, 'working directory clean') === false && strpos($output, 'working tree clean') === false) {
-        $message = 'Remote working directory is not clean! ';
-        $message .= '\nThis means there are uncommitted changes on the server that would be lost if we deployed now. ';
-        $message .= 'Please resolve this manually and try deploying again.';
-        throw new \RuntimeException($message);
-    }
+desc('Takes the selected stage out of maintenance mode.');
+task('artisan:up', function () {
+    $output = run('{{bin/php}} {{release_path}}/artisan up');
+    writeln('<info>'.$output.'</info>');
 });
 
 /**
  *
  */
-desc('Fetch git references');
-task('deploy:git_fetch', function () {
-
-    if (get('standalone', false)) {
-        return;
-    }
-
-    runLocally('git fetch');
-    runLocally('git fetch --tags');
-
-});
-
-/**
- * Check all the required parameters have been supplied.
- */
-desc('Check parameters');
-task('deploy:check_parameters', function () {
-
-    // If the stage is not provided we want to prevent the script from deploying to ALL environments (default behaviour).
-    if (is_null(input()->getArgument('stage'))) {
-        $environments = array_keys(Deployer::get()->environments->toArray());
-        throw new \RuntimeException("No environment was specified. Run the command again with one of the available environments as a parameter: " . implode(', ', $environments));
-    }
-
-    if (empty(input()->getOption('tag')) && empty(input()->getOption('branch'))) {
-        throw new \RuntimeException("No branch or tag was supplied.\n\nPlease provide either --tag={tag} or --branch={branch} so I know what to deploy.");
-    }
-});
-
-/**
- *
- */
-desc('Check branch existence');
-task('deploy:check_branch', function () {
-
-    $branch = get('branch', null);
-
-    // If option `branch` is set.
-    if (!empty(input()->getOption('branch'))) {
-        $branch = input()->getOption('branch');
-    }
-
-    if (empty($branch) || get('standalone', false)) {
-        return;
-    }
-
-    $output = runLocally('git branch -a');
-
-    if (strpos($output, "remotes/origin/$branch") === false) {
-        throw new \RuntimeException("The referenced branch `$branch` doesn't exist on origin.");
-    }
-
-});
-
-desc('Check tag existence');
-task('deploy:check_tag', function () {
-
-    $tag = null;
-
-    // If option `tag` is set
-    if (!empty(input()->getOption('tag'))) {
-        $tag = input()->getOption('tag');
-    } elseif (get('tag', false)) {
-        $tag = get('tag');
-    }
-
-    if (empty($tag) || get('standalone', false)) {
-        return;
-    }
-
-    $output = runLocally('git tag');
-
-    if (strpos($output, $tag) === false) {
-        if (!askConfirmation("The referenced tag `$tag` doesn't exist. Would you like to create it?", true)) {
-            throw new \RuntimeException("The referenced tag `$tag` doesn't exist on origin.");
-        }
-        runLocally("git tag $tag");
-        runLocally("git push origin --tags");
-    }
-
-});
-
-/**
- *
- */
-desc('Send deployment message to slack');
+desc('Send deployment message to Slack.');
 task('notify:send-deployment-message', function () {
 
-    if (empty(get('slack_webhook', false))) {
-        return;
-    }
-
-    // make the repo name pretty by stripping out Github related stuff
-    $repo = str_replace(['https://', 'http://', 'www.', 'git@', 'github.com', ':', '.git'], '', get('repository'));
-    $repo = trim($repo, '/');
+    $repo = sanitize_repository_name(get('repository', ''));
 
     $stage = input()->getArgument('stage');
 
-    // Possible to get here without 'after' set... somehow
     $deployed = '';
     $after = get('after', false);
     if (!empty($after)) {
         $deployed = "at `{$after}` ";
     }
 
-    $postString = json_encode([
+    $message = "Deployed *{$repo}* {$deployed}to *{$stage}*!";
+
+    $postString = \json_encode([
         'icon_emoji'  => get('slack_emoji', ':robot_face:'),
         'username'    => get('slack_name', 'Deployment Bot'),
-        'text'        => "Deployed *{$repo}* {$deployed}to *{$stage}*!",
+        'text'        => $message,
     ]);
 
-    http_post(get('slack_webhook'), $postString);
+    if (!http_post(get('slack_webhook', false), $postString)) {
+        writeln("<error>Attempted to send Slack message, but no 'slack_webhook' set!</error>");
+        writeln("<info>{$message}</info>");
+    }
+});
 
-})->onlyOn(['production']);
+function get_start_end_tags()
+{
+    // These might be set via command line arguments:
+    $start = input()->hasOption('start') ? input()->getOption('start') : false;
+    $end   = input()->hasOption('end') ? input()->getOption('end') : false;
+
+    // Or via hotfix/release tasks:
+    $start = !$start ? get('before', false) : $start;
+    $end   = !$end   ? get('after', false)  : $end;
+
+    return [$start, $end];
+}
 
 /**
  *
  */
-desc('Send release note to slack');
+desc('Send release notes to Slack.');
 task('notify:send-release-notes', function () {
 
-    if (get('slack_webhook', false)) {
-        return;
-    }
+    list($start, $end) = get_start_end_tags();
 
-    if (!input()->hasOption('start') && !input()->hasOption('end')) {
+    if (!$start || !$end) {
+        writeln("<info>Could not determine start and end tags for release notes. Exiting.</info>");
         return;
     }
 
     if (get('release_notes_command', false)) {
+        writeln("<info>release_notes_command' config is not set. Exiting.</info>");
         return;
     }
 
-    $start = input()->getOption('start');
-    $end   = input()->getOption('end');
-
-    $output = runLocally(get('release_notes_command') . " --start=$start --end=$end --format=slack");
-    // @todo: format release notes as a "post" (instead of just a message)
+    $output = runLocally(get('release_notes_command') . " --start={$start} --end={$end} --format=slack");
+    // @todo: format release notes as a Slack post (instead of just a Slack message)
 
     $attachment = [
         'title' => get('slack_title', null),
@@ -310,44 +334,42 @@ task('notify:send-release-notes', function () {
         "mrkdwn"      => true,
     ]);
 
-    http_post(get('slack_webhook'), $postString);
-
-})->onlyOn(['production']);
+    if (!http_post(get('slack_webhook', false), $postString)) {
+        writeln("<error>Attempted to send Slack message, but no 'slack_webhook' set!</error>");
+        writeln("<info>{$output}</info>");
+    }
+});
 
 /**
  *
  */
-desc('Send release note to API');
+desc('Send release notes to API.');
 task('notify:send-release-notes-api', function () {
 
-    if (!input()->hasOption('start') && !input()->hasOption('end')) {
+    list($start, $end) = get_start_end_tags();
+
+    if (!$start || !$end) {
+        writeln("<info>Could not determine start and end tags for release notes. Exiting.</info>");
         return;
     }
 
-    if (get('release_notes_command')) {
+    if (get('release_notes_command', false)) {
+        writeln("<info>release_notes_command' config is not set. Exiting.</info>");
         return;
     }
 
-    $start = input()->getOption('start');
-    $end   = input()->getOption('end');
-
-    $endpoint = get('api_endpoint', null);
-
-    if (empty($endpoint)) {
-        return;
-    }
-
-    // @todo: determine which `release-notes` script to use
     $output = runLocally(get('release_notes_command') . " --start=$start --end=$end --format=json");
 
-    http_post($endpoint, $output);
-
-})->onlyOn(['production']);
+    if (!http_post(get('api_endpoint', false), $output)) {
+        writeln("<error>Attempted to send release notes, but no 'api_endpoint' set!</error>");
+        writeln("<info>{$output}</info>");
+    }
+});
 
 /**
  *
  */
-desc('Run release process');
+desc('Creates and pushes a release tag.');
 task('deploy:release', function(){
 
     $prefix  = get('tag-prefix');
@@ -378,14 +400,14 @@ task('deploy:release', function(){
 
     set('tag', $newTag);
 
-    // Set for the release notes:
+    // Set this for the release notes:
     set('before', $lastTag);
 });
 
 /**
  *
  */
-desc('Run hotfix process');
+desc('Creates and pushes a hotfix tag.');
 task('deploy:hotfix', function(){
 
     $prefix  = get('tag-prefix');
@@ -410,14 +432,12 @@ task('deploy:hotfix', function(){
         throw new \RuntimeException("User aborted.");
     }
 
-    writeln("<info>Latest tag is {$lastTag}. Hotfix tag will be {$newTag}</info>");
-
     runLocally("git tag $newTag");
     runLocally("git push origin --tags");
 
     set('tag', $newTag);
 
-    // Set these for the release notes:
+    // Set this for the release notes:
     set('before', $lastTag);
 });
 
@@ -427,6 +447,7 @@ task('deploy:hotfix', function(){
 task('deploy', [
     'deploy:prepare',
     'deploy:check_parameters',
+    'deploy:check_stage',
     'deploy:clean_working_dir',
     'deploy:git_fetch',
     'deploy:check_branch',
@@ -445,6 +466,7 @@ task('deploy', [
  */
 task('release', [
     'deploy:prepare',
+    'deploy:check_stage',
     'deploy:clean_working_dir',
     'deploy:git_fetch',
     'deploy:release',
@@ -456,7 +478,7 @@ task('release', [
     'artisan:up',
     'notify:send-deployment-message',
     'notify:send-release-notes',
-    'notify:send-release-notes-api',
+    //'notify:send-release-notes-api',
 ]);
 
 /**
@@ -464,6 +486,7 @@ task('release', [
  */
 task('hotfix', [
     'deploy:prepare',
+    'deploy:check_stage',
     'deploy:clean_working_dir',
     'deploy:git_fetch',
     'deploy:hotfix',
@@ -475,5 +498,5 @@ task('hotfix', [
     'artisan:up',
     'notify:send-deployment-message',
     'notify:send-release-notes',
-    'notify:send-release-notes-api',
+    //'notify:send-release-notes-api',
 ]);

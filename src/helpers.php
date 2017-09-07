@@ -1,7 +1,7 @@
 <?php
 /**
- * Slack helpers
- * 
+ * Deployment script helpers
+ *
  * @author coreymcmahon
  * @date: 6/9/17
  */
@@ -11,13 +11,14 @@ namespace Deployer;
 /**
  * @param $endpoint
  * @param $postBody
+ * @return bool
  */
 function http_post($endpoint, $postBody)
 {
-    if (empty($endpoint) || empty($postBody)) {
-        return;
+    if (empty($endpoint)) {
+        return false;
     }
-    
+
     $ch = curl_init();
 
     $options = [
@@ -33,4 +34,24 @@ function http_post($endpoint, $postBody)
     if (curl_exec($ch) !== false) {
         curl_close($ch);
     }
+    
+    return true;
+}
+
+/**
+ * @param $unsanitized
+ * @return null|string
+ */
+function sanitize_repository_name($unsanitized)
+{
+    $unsanitized = str_replace('.git', '', $unsanitized);
+    $parts = explode('/', $unsanitized);
+    $repo = array_pop($parts);
+    $org  = array_pop($parts);
+    
+    if (empty($repo) || empty($org)) {
+        return null;
+    }
+    
+    return "{$org}/{$repo}";
 }
