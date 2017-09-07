@@ -34,7 +34,7 @@ function http_post($endpoint, $postBody)
     if (curl_exec($ch) !== false) {
         curl_close($ch);
     }
-    
+
     return true;
 }
 
@@ -44,14 +44,39 @@ function http_post($endpoint, $postBody)
  */
 function sanitize_repository_name($unsanitized)
 {
-    $unsanitized = str_replace('.git', '', $unsanitized);
+    $unsanitized = str_replace(['.git', ':'], ['', '/'], $unsanitized);
     $parts = explode('/', $unsanitized);
     $repo = array_pop($parts);
     $org  = array_pop($parts);
-    
+
     if (empty($repo) || empty($org)) {
         return null;
     }
-    
+
     return "{$org}/{$repo}";
+}
+
+/**
+ * @param $notes
+ * @param string $title
+ * @param string $link
+ * @return array
+ */
+function prepare_release_note_payload($notes, $title = '', $link = '')
+{
+    $payload = [
+        'fallback' => $notes,
+        'text' => $notes,
+        'color' => '#7CD197',
+    ];
+
+    if (!empty($title)) {
+        $payload['title'] = $title;
+    }
+
+    if (!empty($link)) {
+        $payload['title_link'] = $link;
+    }
+
+    return $payload;
 }
