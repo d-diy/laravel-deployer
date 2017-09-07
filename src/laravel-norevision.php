@@ -349,7 +349,7 @@ task('notify:send-release-notes', function () {
     $link = str_replace([':', 'git@', '.git'], ['/', 'https://', ''], $repo) . "/compare/{$start}...{$end}";
 
     $repoName = sanitize_repository_name($repo);
-    $title = "Release notes {$end} - ($repoName)";
+    $title = "Release Notes - $repoName @ {$end}";
 
     $postString = json_encode([
         'icon_emoji'  => get('slack_emoji', ':robot_face:'),
