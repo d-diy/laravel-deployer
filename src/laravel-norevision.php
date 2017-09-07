@@ -417,6 +417,7 @@ task('deploy:release', function(){
     }
 
     $numbers[1]++;
+    $numbers[2] = 0;
 
     $newTag = $prefix.implode('.', $numbers);
 
